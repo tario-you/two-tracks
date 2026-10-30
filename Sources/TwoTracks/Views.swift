@@ -59,7 +59,6 @@ struct Sidebar: View {
   @EnvironmentObject var recorder: Recorder
   @Binding var selection: String?
   @State private var query = ""
-  @State private var showWispr = true
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -81,24 +80,9 @@ struct Sidebar: View {
 
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 2) {
-          ForEach(groups(store.notes), id: \.0) { title, notes in
+          ForEach(groups((store.notes + store.wispr).sorted { $0.created > $1.created }), id: \.0) { title, notes in
             SectionTitle(title)
             ForEach(notes) { NoteRow(note: $0, selection: $selection) }
-          }
-          if !store.wispr.isEmpty {
-            Button { showWispr.toggle() } label: {
-              HStack {
-                Text("Wispr Flow")
-                Image(systemName: "chevron.right").rotationEffect(.degrees(showWispr ? 90 : 0)).font(.system(size: 9, weight: .bold))
-              }
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Theme.dim)
-            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 4)
-            if showWispr {
-              ForEach(filter(store.wispr)) { NoteRow(note: $0, selection: $selection) }
-            }
           }
         }
         .padding(.bottom, 16)
@@ -182,7 +166,11 @@ struct StartButton: View {
   var body: some View {
     Button { recorder.recording ? recorder.stop() : recorder.start() } label: {
       HStack(spacing: 8) {
-        if recorder.recording {
+        if recorder.starting {
+          ProgressView().controlSize(.small)
+          Text("Starting…")
+          Spacer()
+        } else if recorder.recording {
           RoundedRectangle(cornerRadius: 3).fill(Theme.accent).frame(width: 12, height: 12)
           Text("Stop")
           Spacer()
@@ -238,6 +226,8 @@ struct EmptyState: View {
     VStack(spacing: 16) {
       Text("Two Tracks").font(.system(size: 34, design: .serif))
       Text("What's said, as heard, with English beside it.").foregroundStyle(Theme.dim)
+      Text(WisprControl.running ? "Start uses Wispr Flow's Notetaker." : "Start records and transcribes on this Mac.")
+        .font(.system(size: 12)).foregroundStyle(Theme.dim)
       StartButton().frame(width: 240)
     }
   }
@@ -258,14 +248,19 @@ struct NoteView: View {
     let note = store.note(id)!
     VStack(alignment: .leading, spacing: 0) {
       VStack(alignment: .leading, spacing: 12) {
-        TextField("New note", text: Binding(get: { store.note(id)?.title ?? "" }, set: { t in store.update(id) { $0.title = t } }))
-          .textFieldStyle(.plain)
-          .font(.system(size: 32, design: .serif))
-          .disabled(note.source == .wispr)
+        Group {
+          if note.source == .wispr {
+            Text(note.title)
+          } else {
+            TextField("New note", text: Binding(get: { store.note(id)?.title ?? "" }, set: { t in store.update(id) { $0.title = t } }))
+              .textFieldStyle(.plain)
+          }
+        }
+        .font(.system(size: 32, design: .serif))
         HStack(spacing: 8) {
           Chip(text: note.created.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute()))
           if note.duration > 0 { Chip(text: minutes(note.duration)) }
-          if note.source == .wispr { Chip(text: "From Wispr Flow") }
+          if note.source == .wispr { Chip(text: "Wispr Flow") }
         }
         HStack(spacing: 22) {
           ForEach(Tab.allCases, id: \.self) { t in
@@ -364,6 +359,7 @@ struct LineRow: View {
         }
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .textSelection(.enabled)
   }
 }
@@ -433,8 +429,12 @@ struct RecordingBar: View {
         .contentShape(Capsule())
       }.buttonStyle(.plain)
       Clock()
-      Meter(label: "You", level: recorder.level[.you] ?? 0)
-      Meter(label: "Them", level: recorder.level[.them] ?? 0)
+      if recorder.viaWispr {
+        Text("Wispr Flow is transcribing").font(.system(size: 12)).foregroundStyle(Theme.dim)
+      } else {
+        Meter(label: "You", level: recorder.level[.you] ?? 0)
+        Meter(label: "Them", level: recorder.level[.them] ?? 0)
+      }
       Spacer()
     }
     .padding(.horizontal, 36).padding(.vertical, 14)

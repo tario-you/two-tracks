@@ -20,14 +20,14 @@ enum Wispr {
     defer { sqlite3_finalize(stmt) }
     let parser = DateFormatter()
     parser.locale = Locale(identifier: "en_US_POSIX")
-    parser.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS Z"
+    parser.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS xxx"
     var out: [Note] = []
     while sqlite3_step(stmt) == SQLITE_ROW {
       func text(_ i: Int32) -> String? { sqlite3_column_text(stmt, i).map { String(cString: $0) } }
       guard let id = text(0) else { continue }
-      let file = root.appendingPathComponent("meetings/\(id)/live.ndjson")
-      guard FileManager.default.fileExists(atPath: file.path) else { continue }
-      var n = Note(id: id, title: text(1) ?? "Untitled", created: text(2).flatMap(parser.date(from:)) ?? Date(), source: .wispr)
+      // A meeting that just started has a folder before its first line.
+      guard FileManager.default.fileExists(atPath: root.appendingPathComponent("meetings/\(id)").path) else { continue }
+      var n = Note(id: id, title: text(1) ?? "New note", created: text(2).flatMap(parser.date(from:)) ?? Date(), source: .wispr)
       n.live = sqlite3_column_type(stmt, 3) == SQLITE_NULL
       n.duration = Double(sqlite3_column_int64(stmt, 4)) / 1000
       out.append(n)

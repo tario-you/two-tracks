@@ -6,11 +6,17 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 swift build -c release
 app="build/Two Tracks.app"
-rm -rf "$app"
+rm -rf "${app:?}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .build/release/TwoTracks "$app/Contents/MacOS/"
 cp Resources/Info.plist "$app/Contents/"
-[ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$app/Contents/Resources/"
+# With Wispr Flow installed, the icon is Wispr's with a "中/EN" tag, drawn here from the local copy.
+wispr_icon="/Applications/Wispr Flow.app/Contents/Resources/electron.icns"
+if [ -f "$wispr_icon" ] && swift scripts/make-icon.swift "$wispr_icon" && iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns; then
+  cp build/AppIcon.icns "$app/Contents/Resources/"
+else
+  cp Resources/AppIcon.icns "$app/Contents/Resources/"
+fi
 # Swift package resources (the tokenizer data WhisperKit ships with).
 find .build/release -maxdepth 1 -name '*.bundle' -exec cp -R {} "$app/Contents/Resources/" \;
 codesign --force --deep --options runtime --entitlements Resources/TwoTracks.entitlements --sign "${SIGN_IDENTITY:--}" "$app"

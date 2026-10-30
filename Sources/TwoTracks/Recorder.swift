@@ -1,7 +1,9 @@
 import Foundation
 
-/// Runs a note while it records: your mic and the call's audio each go through their own
-/// segmenter, every utterance is transcribed in turn, and its English follows.
+/// Runs a note while it records. With Wispr Flow running, Start starts Wispr's own Notetaker and
+/// follows the meeting it opens (Wispr transcribes; Two Tracks adds English). Without Wispr, your
+/// mic and the call's audio each go through their own segmenter, Whisper transcribes every
+/// utterance in turn, and its English follows.
 @MainActor
 final class Recorder: ObservableObject {
   @Published private(set) var noteID: String?
@@ -10,6 +12,9 @@ final class Recorder: ObservableObject {
   @Published private(set) var speaking: Set<Speaker> = []
   @Published var problem: String?
   @Published private(set) var model: Transcriber.State = .idle
+  @Published private(set) var starting = false
+  /// True while Wispr Flow does the recording.
+  @Published private(set) var viaWispr = false
 
   private let store: Store
   private var mic: MicCapture?
@@ -29,8 +34,71 @@ final class Recorder: ObservableObject {
   var recording: Bool { noteID != nil }
 
   func start() {
-    guard !recording else { return }
+    guard !recording, !starting else { return }
     problem = nil
+    if WisprControl.running { startWispr() } else { startLocal() }
+  }
+
+  func stop() {
+    if viaWispr { stopWispr() } else { stopLocal() }
+  }
+
+  // MARK: Wispr Flow
+
+  private var watch: Timer?
+
+  private func startWispr() {
+    starting = true
+    let t = Date()
+    do { try WisprControl.pressShortcut() } catch {
+      starting = false
+      problem = error.localizedDescription
+      return
+    }
+    Task {
+      for _ in 0..<40 {
+        if let m = WisprControl.meeting(since: t) {
+          store.wispr = Wispr.meetings().map { n in
+            var n = n
+            if let old = store.wispr.first(where: { $0.id == n.id }) { n.lines = old.lines }
+            return n
+          }
+          starting = false
+          viaWispr = true
+          started = m.created
+          noteID = m.id
+          // Ends here too when he stops it in Wispr's own window.
+          watch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+              guard let self, let id = self.noteID, Wispr.meetings().first(where: { $0.id == id })?.live != true else { return }
+              self.endWispr()
+            }
+          }
+          return
+        }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+      }
+      starting = false
+      problem = "Wispr Flow didn't start a note. If it showed a prompt, answer it there."
+    }
+  }
+
+  private func stopWispr() {
+    do { try WisprControl.pressStop() } catch { problem = error.localizedDescription }
+    endWispr()
+  }
+
+  private func endWispr() {
+    watch?.invalidate()
+    watch = nil
+    noteID = nil
+    started = nil
+    viaWispr = false
+  }
+
+  // MARK: On-device
+
+  private func startLocal() {
     let note = store.newNote()
     noteID = note.id
     started = Date()
@@ -76,7 +144,7 @@ final class Recorder: ObservableObject {
     }
   }
 
-  func stop() {
+  private func stopLocal() {
     guard let id = noteID else { return }
     mic?.stop(); system?.stop()
     mic = nil; system = nil

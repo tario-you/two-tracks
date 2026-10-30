@@ -26,7 +26,7 @@ actor Transcriber {
         report?(.downloading(p.fractionCompleted))
       }
       report?(.loading)
-      let w = try await WhisperKit(WhisperKitConfig(modelFolder: folder.path, verbose: false, logLevel: .error, prewarm: false, load: true, download: false))
+      let w = try await WhisperKit(WhisperKitConfig(modelFolder: folder.path, verbose: ProcessInfo.processInfo.environment["TT_DEBUG"] != nil, logLevel: ProcessInfo.processInfo.environment["TT_DEBUG"] != nil ? .debug : .error, prewarm: false, load: true, download: false))
       report?(.ready)
       return w
     }

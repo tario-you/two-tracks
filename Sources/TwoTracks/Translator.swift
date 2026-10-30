@@ -42,10 +42,13 @@ final class Translator {
     guard appleSent.insert(line.id).inserted else { return }
     Task {
       var english = "(Apple Translation needs the \(line.language) language: System Settings › General › Language & Region › Translation Languages)"
+      // A session made outside SwiftUI needs the macOS 26 SDK (Swift 6.2 and later).
+      #if compiler(>=6.2)
       if #available(macOS 26.0, *) {
         let session = TranslationSession(installedSource: Locale.Language(identifier: line.language), target: Locale.Language(identifier: "en"))
         if let r = try? await session.translate(line.text) { english = r.targetText }
       }
+      #endif
       deliver?(note, line.id, english)
     }
   }
@@ -108,10 +111,12 @@ final class ClaudeSession {
 
   private func next() {
     guard inFlight.isEmpty, !queue.isEmpty, process.isRunning else { return }
-    let batch = queue.prefix(30)
-    queue.removeFirst(batch.count)
+    // Newest first: a live line, or the end of a long meeting where the view sits, comes back
+    // before the backlog. Each batch stays in spoken order.
+    let batch = queue.suffix(30)
+    queue.removeLast(batch.count)
     inFlight = batch.map { counter += 1; return (counter, $0) }
-    let content = inFlight.map { "[\($0.n)] \($0.line.speaker.label): \($0.line.text)" }.joined(separator: "\n")
+    let content = "Translate into English:\n" + inFlight.map { "[\($0.n)] \($0.line.speaker.label): \($0.line.text)" }.joined(separator: "\n")
     let message: [String: Any] = ["type": "user", "message": ["role": "user", "content": content]]
     guard var data = try? JSONSerialization.data(withJSONObject: message) else { return }
     data.append(0x0A)
@@ -129,6 +134,7 @@ final class ClaudeSession {
   }
 
   private func finish(_ text: String) {
+    if ProcessInfo.processInfo.environment["TT_DEBUG"] != nil { FileHandle.standardError.write(Data(("RESULT: " + text + "\n").utf8)) }
     var got: [Int: String] = [:]
     let pattern = try! NSRegularExpression(pattern: #"^\s*\[(\d+)\]\s*(.*)$"#)
     for raw in text.split(separator: "\n") {
