@@ -2,12 +2,16 @@
 
 A meeting notetaker for the Mac that keeps two transcripts side by side: what was said, in whatever language it was said, and the same thing in English.
 
-Press **Start notetaker**. Two Tracks listens to your microphone (You) and to whatever your Mac is playing, such as the other side of a Zoom, Meet, Teams or WeChat call (Them). Each pause becomes a line. Whisper works out the language of each line on its own, so a call that moves between Chinese and English is written down as spoken, and the English for every other line appears next to it a moment later. Press **Stop** and the note gets a title and a summary.
+Press **Start notetaker**.
 
-- Transcription runs on your Mac (Whisper large-v3 turbo through [WhisperKit](https://github.com/argmaxinc/WhisperKit)). Audio never leaves the machine.
-- Translation uses [Claude Code](https://claude.com/claude-code) if it is installed and signed in: one Claude session per note, so each line is translated knowing what came before, on your Claude plan with no API key. Without Claude Code it falls back to Apple's on-device Translation.
-- Switch between notes in the sidebar, search them, and show both tracks, only the original, or only English.
-- If you use Wispr Flow's Notetaker, its meetings appear in the sidebar too, read-only, with an English track added.
+- **With [Wispr Flow](https://wisprflow.ai) running**, Start starts Wispr's own Notetaker (by pressing its notetaker shortcut) and Two Tracks follows the meeting live as Wispr transcribes it. Stop presses Wispr's Stop. Nothing is downloaded. Your older Wispr meetings are in the sidebar too.
+- **Without Wispr Flow**, Two Tracks records itself: your microphone (You) and whatever the Mac plays, such as the other side of a Zoom, Meet, Teams or WeChat call (Them). Each pause becomes a line, transcribed on the Mac by Whisper large-v3 turbo through [WhisperKit](https://github.com/argmaxinc/WhisperKit), which downloads once (632 MB) the first time. Audio never leaves the machine.
+
+Either way, each line is shown in the language it was spoken, and its English appears beside it a moment later.
+
+- English comes from [Claude Code](https://claude.com/claude-code) if it is installed and signed in: one Claude session per note, so each line is translated knowing what came before, on your Claude plan with no API key. Newest lines go first, so a live meeting never waits behind a backlog. Without Claude Code, Apple's on-device Translation does it.
+- Show both tracks, only the original, or only English. Search every note from the sidebar.
+- Stopping a note of its own gives it a title and a summary; any note can be summarized from its Summary tab.
 
 ## Install
 
@@ -19,7 +23,7 @@ cd two-tracks
 scripts/build-app.sh --install
 ```
 
-The first time you press Start notetaker, macOS asks for the microphone and for system audio recording, and Two Tracks downloads the speech model once (632 MB). To keep those permissions across rebuilds, sign with your own identity: `SIGN_IDENTITY="Apple Development: …" scripts/build-app.sh --install`.
+With Wispr Flow, the first Start asks to allow Two Tracks under Accessibility (to press Wispr's shortcut and its Stop button). Without it, macOS asks for the microphone and for system audio recording. With Wispr Flow installed, the build gives the app Wispr's icon with a 中/EN tag, drawn from your local copy. To keep those permissions across rebuilds, sign with your own identity: `SIGN_IDENTITY="Apple Development: …" scripts/build-app.sh --install`.
 
 Two Tracks adds itself to Login Items. Turn that off in System Settings › General › Login Items.
 
@@ -32,7 +36,7 @@ Two Tracks adds itself to Login Items. Turn that off in System Settings › Gene
 | Whisper with per-utterance language detection | `Transcriber.swift` |
 | English track: batched Claude Code session, or Apple Translation | `Translator.swift` |
 | Recording a note | `Recorder.swift` |
-| Wispr Flow meetings | `Wispr.swift` |
+| Wispr Flow meetings, and starting and stopping its Notetaker | `Wispr.swift`, `WisprControl.swift` |
 | The window | `Views.swift` |
 
 Notes are JSON files in `~/Library/Application Support/Two Tracks/notes`.

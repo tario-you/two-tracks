@@ -94,8 +94,14 @@ final class Store: ObservableObject {
 
   private var translationsDir: URL { Store.home.appendingPathComponent("wispr-translations", isDirectory: true) }
 
+  /// Also reads the folder the first Two Tracks (a small web view over the same files) kept.
   func savedTranslations(_ id: String) -> [String: String] {
-    (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: translationsDir.appendingPathComponent("\(id).json")))) ?? [:]
+    var map: [String: String] = [:]
+    for dir in [Store.home.appendingPathComponent("translations"), translationsDir] {
+      let saved = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: dir.appendingPathComponent("\(id).json")))) ?? [:]
+      map.merge(saved) { _, new in new }
+    }
+    return map
   }
 
   private func saveTranslations(_ n: Note) {
