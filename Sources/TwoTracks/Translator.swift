@@ -42,10 +42,13 @@ final class Translator {
     guard appleSent.insert(line.id).inserted else { return }
     Task {
       var english = "(Apple Translation needs the \(line.language) language: System Settings › General › Language & Region › Translation Languages)"
+      // A session made outside SwiftUI needs the macOS 26 SDK (Swift 6.2 and later).
+      #if compiler(>=6.2)
       if #available(macOS 26.0, *) {
         let session = TranslationSession(installedSource: Locale.Language(identifier: line.language), target: Locale.Language(identifier: "en"))
         if let r = try? await session.translate(line.text) { english = r.targetText }
       }
+      #endif
       deliver?(note, line.id, english)
     }
   }
