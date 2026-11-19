@@ -8,5 +8,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Speech engines
+        run: scripts/fetch-engine.sh
       - name: Build
         run: swift build -c release

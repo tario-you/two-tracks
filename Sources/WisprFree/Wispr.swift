@@ -56,7 +56,9 @@ enum Wispr {
       if lang == "en", counts.contains(where: { $0["language"] as? String != "en" }) { lang = "mixed" }
       out.append(Line(
         id: id, speaker: speaker["source"] as? String == "mic" ? .you : .them,
-        start: (o["startRecordingMs"] as? Double ?? 0) / 1000, text: text, language: lang
+        start: (o["startRecordingMs"] as? Double).map { $0 / 1000 }
+          ?? ((o["timestamp"] as? String) ?? "").split(separator: ":").compactMap { Double($0) }.reduce(0) { $0 * 60 + $1 },
+        text: text, language: lang
       ))
     }
     return (out, offset + UInt64(lastNL) + 1)

@@ -1,55 +1,78 @@
-# Two Tracks
+# WisprFree
 
-A meeting notetaker for the Mac that keeps two transcripts side by side: what was said, in whatever language it was said, and the same thing in English.
+Dictation for the Mac in the style of Wispr Flow, with speech recognition running on the Mac itself. Hold a key, speak,
+and let go: the words land where you're typing, cleaned up and in the style you chose for that kind of app. It also takes
+meeting notes: your side and theirs, transcribed live, then cleaned up, with the speakers named and a summary.
 
-Press **Start notetaker**.
+## What it does
 
-- **With [Wispr Flow](https://wisprflow.ai) running**, Start starts Wispr's own Notetaker (by pressing its notetaker shortcut) and Two Tracks follows the meeting live as Wispr transcribes it. Stop presses Wispr's Stop. Nothing is downloaded. Your older Wispr meetings are in the sidebar too.
-- **Without Wispr Flow**, Two Tracks records itself: your microphone (You) and whatever the Mac plays, such as the other side of a Zoom, Meet, Teams or WeChat call (Them). Each pause becomes a line, transcribed on the Mac by Whisper large-v3 turbo through [WhisperKit](https://github.com/argmaxinc/WhisperKit), which downloads once (632 MB) the first time. Audio never leaves the machine.
-
-Either way, each line is shown in the language it was spoken, and its English appears beside it a moment later.
-
-- English comes from [Claude Code](https://claude.com/claude-code) if it is installed and signed in: one Claude session per note, so each line is translated knowing what came before, on your Claude plan with no API key. Newest lines go first, so a live meeting never waits behind a backlog. Without Claude Code, Apple's on-device Translation does it.
-- Show both tracks, only the original, or only English. Search every note from the sidebar.
-- Stopping a note of its own gives it a title and a summary; any note can be summarized from its Summary tab.
-
-## Install
-
-Requires macOS 15 or later on Apple silicon, and Xcode's command line tools.
-
-```bash
-git clone https://github.com/tario-you/two-tracks.git
-cd two-tracks
-scripts/build-app.sh --install
-```
-
-With Wispr Flow, the first Start asks to allow Two Tracks under Accessibility (to press Wispr's shortcut and its Stop button). Without it, macOS asks for the microphone and for system audio recording. With Wispr Flow installed, the build gives the app Wispr's icon with a 中/EN tag, drawn from your local copy. To keep those permissions across rebuilds, sign with your own identity: `SIGN_IDENTITY="Apple Development: …" scripts/build-app.sh --install`.
-
-Two Tracks adds itself to Login Items. Turn that off in System Settings › General › Login Items.
+- **Dictate anywhere.** Hold the talk key (fn by default; Right ⌥, Left ⌥, Right ⌘, Right ⌃ or Right ⇧ in Settings),
+  speak, let go. Double-tap it, or press Space while holding it, for hands-free. Esc cancels. ⌃⌘V pastes the last
+  dictation again, ⌃⌘C copies it.
+- **The flow bar.** A small pill at the bottom of the screen shows a live waveform while you talk, a stop and a cancel
+  button when hands-free, and a shimmer while the words are written.
+- **Formatting after the words are heard.** Fillers and false starts come out, self-corrections are applied ("at 2,
+  actually 3" becomes "at 3"), punctuation, lists, numbers, emails and spoken commands ("new line") are written the way
+  people type. Your slang stays. The style follows the app: Formal, Casual, very casual or Excited for personal
+  messages, work messages, email and everything else; AI chats and code editors get plain clean text.
+- **Dictionary and snippets.** Words to spell right, phrases to swap, and short cues that expand into whole texts.
+- **Many languages.** Whisper base names the language of each dictation. Parakeet writes English, Parakeet v3 24 other
+  European languages, X-ASR Chinese; with Chinese among your languages, Chinese words inside English speech are kept.
+- **Notetaker.** ⌥M starts and stops it. Your microphone and the Mac's sound (the other side of any call) are
+  transcribed separately, live. When it stops, the transcript is cleaned up into paragraphs with the speakers named,
+  titled and summarized. Ask questions about any meeting, or "What did I miss?" during one. Lines in another language
+  get an English translation beside them.
+- **Home.** Your dictation history, searchable, with words per minute, total words and your streak.
+- **Coming from Wispr Flow?** On first launch WisprFree reads (never writes) Wispr Flow's local data: your dictation
+  history, dictionary, snippets, styles, talk key and other settings, and your past Wispr meetings appear in the
+  notetaker. While Wispr Flow runs, WisprFree stands by so one key never types twice.
 
 ## How it works
 
 | Piece | File |
 |---|---|
-| Mic with echo cancellation, and system audio through a Core Audio process tap | `Sources/TwoTracks/Audio.swift` |
-| Cutting each stream into utterances at pauses, with a threshold that follows the noise floor | `Segmenter` in `Audio.swift` |
-| Whisper with per-utterance language detection | `Transcriber.swift` |
-| English track: batched Claude Code session, or Apple Translation | `Translator.swift` |
-| Recording a note | `Recorder.swift` |
-| Wispr Flow meetings, and starting and stopping its Notetaker | `Wispr.swift`, `WisprControl.swift` |
-| The window | `Views.swift` |
+| The speech router: Whisper base (whisper.cpp) names the language; Parakeet, Parakeet v3 or X-ASR (sherpa-onnx) writes it | `Engine.swift` |
+| Downloading the models once (about 1.6 GB) | `Models.swift` |
+| The talk key, its double tap, Space, Esc and the shortcuts, through a Quartz event tap | `KeyTap.swift` |
+| Recording, transcribing, formatting and pasting a dictation | `Dictation.swift` |
+| Formatting: the model's instructions, the plain rules that stand in for it, styles per app, dictionary, snippets | `Formatter.swift` |
+| Pasting at the cursor and reading the text before it (Accessibility), muting while dictating | `Inserter.swift` |
+| Gemini on Vertex AI (gcloud's sign-in) for formatting; Claude Code on your Claude plan for meeting work | `LLM.swift` |
+| The flow bar | `FlowBar.swift` |
+| Home, Dictionary, Snippets, Style, Settings and first launch | `Hub.swift`, `Settings.swift` |
+| History, dictionary and snippets in SQLite; reading Wispr Flow's | `Library.swift` |
+| The notetaker: mic and system audio, segmenter, the cleaned-up transcript, questions, summaries, translation | `Audio.swift`, `Meeting.swift`, `Translate.swift`, `NotetakerViews.swift`, `Wispr.swift` |
 
-Notes are JSON files in `~/Library/Application Support/Two Tracks/notes`.
+Speech never leaves the Mac. Formatting sends the words of each dictation (never audio) to Gemini on your own Google
+Cloud project: sign in once with `gcloud auth login` and set a project with `gcloud config set project …` (or name one
+in Settings). Without it, dictation still works with plain rules. Meeting cleanup, summaries and questions use Claude
+Code on your Claude plan when it's installed and signed in, and Gemini otherwise.
 
-To check the pipeline without a microphone or a call, run a recording through it:
+Data lives in `~/Library/Application Support/WisprFree`: `wisprfree.sqlite` (history, dictionary, snippets), `notes/`
+(meetings) and `models/`. Notes that Two Tracks kept are copied in on first launch.
+
+## Build and install
+
+Requires macOS 15 or later on Apple silicon and Xcode's command line tools.
 
 ```bash
-swift build -c release
-.build/release/TwoTracks --probe meeting.wav
+git clone https://github.com/tario-you/wisprfree.git
+cd wisprfree
+scripts/build-app.sh --install
 ```
 
-It prints each line with its language and English, and how long transcription and translation took.
+`scripts/fetch-engine.sh` (run by the build when needed) downloads sherpa-onnx's macOS library and whisper.cpp's
+framework, pinned to their checksums. To keep macOS's Microphone and Accessibility permissions across rebuilds, sign
+with your own identity: `SIGN_IDENTITY="Developer ID Application: …" scripts/build-app.sh --install`.
+
+Checks without the window:
+
+```bash
+.build/release/WisprFree --dictate recording.wav --app com.apple.MobileSMS   # one dictation, with timings
+.build/release/WisprFree --eval 50                                          # Wispr Flow's last 50 recordings, side by side
+.build/release/WisprFree --probe meeting.wav                                # the notetaker's path on a recording
+```
 
 ## License
 
-MIT
+MIT. EB Garamond and Figtree are under the SIL Open Font License (`Resources/Fonts`).

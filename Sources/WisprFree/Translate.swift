@@ -12,11 +12,7 @@ final class Translator {
 
   private var sessions: [String: ClaudeSession] = [:]
 
-  nonisolated static let claudePath: String? = {
-    let home = FileManager.default.homeDirectoryForCurrentUser.path
-    return ["\(home)/.local/bin/claude", "\(home)/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
-      .first { FileManager.default.isExecutableFile(atPath: $0) }
-  }()
+  nonisolated static var claudePath: String? { ClaudePlan.path }
 
   var engineName: String { Self.claudePath == nil ? "Apple Translation" : "Claude" }
 
@@ -83,9 +79,9 @@ final class ClaudeSession {
         + "Keep a trailing dash if a line breaks off.",
     ]
     process.currentDirectoryURL = FileManager.default.temporaryDirectory
-    var env = ProcessInfo.processInfo.environment
-    let home = FileManager.default.homeDirectoryForCurrentUser.path
-    env["PATH"] = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    var env = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("CLAUDE") && !$0.key.hasPrefix("ANTHROPIC") }
+    env["PATH"] = LLM.toolPath
+    env.merge(LLM.proxyEnvironment) { _, new in new }
     process.environment = env
     process.standardInput = stdin
     process.standardOutput = stdout
@@ -156,38 +152,5 @@ final class ClaudeSession {
     }
     inFlight = []
     next()
-  }
-}
-
-/// Short title and summary for a finished note, through the same Claude Code login.
-enum Summarizer {
-  static func run(_ note: Note) async -> (title: String, summary: String)? {
-    guard let path = Translator.claudePath, !note.lines.isEmpty else { return nil }
-    let transcript = note.lines.map { "\($0.speaker.label): \($0.english ?? $0.text)" }.joined(separator: "\n")
-    let prompt = """
-    Here is a meeting transcript (You is the note taker). Write, in English:
-    line 1: a title of at most six words, no quotes or punctuation at the end;
-    then a blank line, then a summary in Markdown: a few bullet points of what was discussed and decided, \
-    then "Action items" with who does what, if any.
-
-    \(transcript)
-    """
-    return await withCheckedContinuation { cont in
-      let p = Process()
-      p.executableURL = URL(fileURLWithPath: path)
-      p.arguments = ["-p", "--model", "claude-haiku-5-5", "--tools", "", "--no-session-persistence", prompt]
-      p.currentDirectoryURL = FileManager.default.temporaryDirectory
-      let out = Pipe()
-      p.standardOutput = out
-      p.standardError = FileHandle.nullDevice
-      p.terminationHandler = { _ in
-        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-          .trimmingCharacters(in: .whitespacesAndNewlines)
-        let parts = text.split(separator: "\n", maxSplits: 1).map(String.init)
-        guard let title = parts.first, !title.isEmpty else { return cont.resume(returning: nil) }
-        cont.resume(returning: (title.trimmingCharacters(in: CharacterSet(charactersIn: "#* ")), parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespacesAndNewlines) : ""))
-      }
-      do { try p.run() } catch { cont.resume(returning: nil) }
-    }
   }
 }
