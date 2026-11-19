@@ -6,7 +6,7 @@ import CoreGraphics
 final class KeyTap {
   static let shared = KeyTap()
 
-  enum Event { case talkDown, talkUp, chord, space, escape, pasteLast, copyLast, meeting }
+  enum Event { case talkDown, talkUp, chord, space, escape, pasteLast, copyLast, meeting, toggle }
 
   var handler: ((Event) -> Bool)?
   var talkKeyCode: Int64 = 63
@@ -82,6 +82,7 @@ final class KeyTap {
         if mods == [.maskCommand, .maskControl] && code == 9 { swallow = emit(.pasteLast) }
         else if mods == [.maskCommand, .maskControl] && code == 8 { swallow = emit(.copyLast) }
         else if mods == [.maskAlternate] && code == 46 { swallow = emit(.meeting) }
+        else if mods == [.maskAlternate] && code == 13 && flags.rawValue & 0x20 != 0 { swallow = emit(.toggle) }
         else if held { _ = emit(.chord) }
       }
       if swallow { swallowedUps.insert(code); return nil }

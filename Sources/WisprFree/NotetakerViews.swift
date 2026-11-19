@@ -56,7 +56,8 @@ struct NotetakerPage: View {
   }
 
   private func groups() -> [(String, [Note])] {
-    let all = (store.notes + store.wispr).sorted { $0.created > $1.created }.filter { n in
+    let mine = Set(store.notes.map(\.id))
+    let all = (store.notes + store.wispr.filter { !mine.contains($0.id) }).sorted { $0.created > $1.created }.filter { n in
       query.isEmpty || n.title.localizedCaseInsensitiveContains(query) || n.lines.contains { $0.text.localizedCaseInsensitiveContains(query) }
     }
     let cal = Calendar.current
@@ -153,7 +154,7 @@ struct NoteView: View {
   @EnvironmentObject var recorder: Recorder
   let id: String
   enum Tab: String, CaseIterable { case notes = "My thoughts", transcript = "Transcript", summary = "Summary" }
-  enum Mode: String, CaseIterable { case cleaned = "Cleaned up", original = "As heard", english = "English" }
+  enum Mode: String, CaseIterable { case cleaned = "Cleaned up", original = "As heard", both = "Both", english = "English" }
   @State private var tab = Tab.transcript
   @AppStorage("transcriptMode") private var mode = Mode.cleaned
   @AppStorage("improveHintDismissed") private var hintDismissed = false
@@ -221,7 +222,9 @@ struct NoteView: View {
           .font(Theme.sans(13, .medium)).monospacedDigit().foregroundStyle(Theme.dim)
         if recorder.improving.contains(id) { ProgressView().controlSize(.small); Text("Cleaning up…").font(Theme.sans(12)).foregroundStyle(Theme.dim) }
         Spacer()
-        Picker("", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented).labelsHidden().frame(width: 260)
+        Picker("", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented).labelsHidden().frame(width: 330)
+          .onChange(of: mode) { _, m in if m == .both || m == .english { Translator.shared.translate(note: id, lines: note.lines) } }
+          .onAppear { if mode == .both || mode == .english { Translator.shared.translate(note: id, lines: note.lines) } }
         Button { Inserter.copy(recorder.transcriptText(note)) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.plain).foregroundStyle(Theme.dim).help("Copy transcript")
       }
       .padding(.horizontal, 14).padding(.vertical, 10)
@@ -257,8 +260,15 @@ struct NoteView: View {
                 Text(line.speaker.label).font(Theme.sans(12, .semibold)).foregroundStyle(line.speaker == .you ? Theme.lilac : Theme.dim)
                   .padding(.top, i == 0 ? 0 : 10)
               }
-              let english = mode == .english && !line.isEnglish
-              Bubble(text: english ? (line.english ?? "…") : line.text, time: line.start, dim: english && line.english == nil)
+              if mode == .both && !line.isEnglish {
+                HStack(alignment: .top, spacing: 10) {
+                  Bubble(text: line.text, time: line.start, dim: false)
+                  Bubble(text: line.english ?? "…", time: nil, dim: line.english == nil)
+                }
+              } else {
+                let english = mode == .english && !line.isEnglish
+                Bubble(text: english ? (line.english ?? "…") : line.text, time: line.start, dim: english && line.english == nil)
+              }
             }
           }
           if recorder.noteID == note.id {

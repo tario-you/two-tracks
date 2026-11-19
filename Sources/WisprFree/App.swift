@@ -35,6 +35,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate {
     App.applyLogin()
     NSApp.mainMenu = menu()
     makeStatusItem()
+    MeetingWatch.shared.start()
+    if !UserDefaults.standard.bool(forKey: "wisprMeetingsImported2"), FileManager.default.fileExists(atPath: Wispr.root.path) {
+      let have = Set(App.store.notes.map(\.id))
+      Task.detached(priority: .utility) {
+        let notes = WisprImport.meetings(skipping: have)
+        await MainActor.run {
+          App.store.adopt(notes)
+          UserDefaults.standard.set(true, forKey: "wisprMeetingsImported2")
+          Log.line("imported \(notes.count) Wispr Flow meetings")
+        }
+      }
+    }
     FlowBar.shared.show()
     ModelsSetup.shared.start()
     KeyTap.shared.handler = { e in MainActor.assumeIsolated { Dictation.shared.handle(e) } }

@@ -82,6 +82,8 @@ final class Prefs: ObservableObject {
   @Published var aiFormatting: Bool { didSet { d.set(aiFormatting, forKey: "aiFormatting") } }
   /// Wispr Flow's Auto Cleanup: off keeps every word as spoken ("like", "you know") and only fixes how it's written.
   @Published var cleanup: Bool { didSet { d.set(cleanup, forKey: "cleanup") } }
+  /// Starts the notetaker by itself when a call app starts using the microphone, and stops it after the call.
+  @Published var autoMeetings: Bool { didSet { d.set(autoMeetings, forKey: "autoMeetings") } }
   @Published var styles: [Category: Style] { didSet { for (c, s) in styles { d.set(s.rawValue, forKey: "style.\(c.rawValue)") } } }
   @Published var languages: [String] { didSet { d.set(languages, forKey: "languages") } }
   @Published var muteWhileDictating: Bool { didSet { d.set(muteWhileDictating, forKey: "muteWhileDictating") } }
@@ -100,6 +102,7 @@ final class Prefs: ObservableObject {
     talkKey = TalkKey(rawValue: d.string(forKey: "talkKey") ?? "") ?? .fn
     aiFormatting = d.object(forKey: "aiFormatting") as? Bool ?? true
     cleanup = d.object(forKey: "cleanup") as? Bool ?? true
+    autoMeetings = d.object(forKey: "autoMeetings") as? Bool ?? true
     var s: [Category: Style] = [:]
     for c in Category.allCases { s[c] = Style(rawValue: d.string(forKey: "style.\(c.rawValue)") ?? "") ?? (c == .email ? .formal : .casual) }
     styles = s
@@ -143,6 +146,7 @@ final class Prefs: ObservableObject {
     if let v = user["hideAppInDock"] as? Bool { showInDock = !v }
     if let v = user["shouldMuteAudio"] as? Bool { muteWhileDictating = v }
     if let v = user["aiFormatting"] as? Bool { aiFormatting = v }
+    if let v = user["autoDetectMeetingsEnabled"] as? Bool { autoMeetings = v }
     if let level = (user["autoCleanup"] as? [String: Any])?["level"] as? String { cleanup = level != "none" }
     if let v = user["openAtLogin"] as? Bool { launchAtLogin = v }
     if let v = user["firstName"] as? String, !v.isEmpty { firstName = v }

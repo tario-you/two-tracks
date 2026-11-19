@@ -96,6 +96,16 @@ final class Store: ObservableObject {
     }
   }
 
+  /// Adds notes made elsewhere (Wispr Flow's meetings) and saves each.
+  func adopt(_ new: [Note]) {
+    let have = Set(notes.map(\.id))
+    for n in new where !have.contains(n.id) {
+      notes.append(n)
+      save(n.id)
+    }
+    notes.sort { $0.created > $1.created }
+  }
+
   func delete(_ id: String) {
     notes.removeAll { $0.id == id }
     try? FileManager.default.removeItem(at: dir.appendingPathComponent("\(id).json"))

@@ -75,6 +75,9 @@ final class Dictation: ObservableObject {
     case .meeting:
       App.shared?.toggleNotetaker()
       return true
+    case .toggle:
+      toggleHandsFree()
+      return true
     }
     return false
   }

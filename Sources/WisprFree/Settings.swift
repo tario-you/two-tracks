@@ -52,6 +52,9 @@ struct SettingsPage: View {
           row("Hold to dictate", "Double-tap it, or press Space while holding, for hands-free. Esc cancels.") {
             Picker("", selection: $prefs.talkKey) { ForEach(TalkKey.allCases) { Text($0.label).tag($0) } }.labelsHidden().frame(width: 150)
           }
+          row("Take notes in calls by itself", "Starts the notetaker when Zoom, Meet, Teams, FaceTime or WeChat starts using the microphone, and stops after the call.") {
+            Toggle("", isOn: $prefs.autoMeetings).toggleStyle(.switch).labelsHidden()
+          }
           row("Microphone", "") {
             Picker("", selection: $prefs.micUID) {
               Text("System default").tag("")
@@ -93,6 +96,7 @@ struct SettingsPage: View {
         section("Shortcuts") {
           shortcut("Dictate", "Hold \(prefs.talkKey.label)")
           shortcut("Hands-free", "Double-tap \(prefs.talkKey.label)")
+          shortcut("Start or stop hands-free", "Left ⌥W")
           shortcut("Cancel", "Esc")
           shortcut("Paste last transcript", "⌃⌘V")
           shortcut("Copy last transcript", "⌃⌘C")

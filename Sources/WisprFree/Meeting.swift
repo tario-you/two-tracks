@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 
 /// The notetaker: your microphone (You) and whatever the Mac plays (Them) each go through their own segmenter, every
@@ -245,5 +246,70 @@ final class WisprFollower {
     }
     tick()
     timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in Task { @MainActor in tick() } }
+  }
+}
+
+/// Wispr Flow's automatic meeting notes: when a call app starts using the microphone (Zoom, Meet in a browser, Teams,
+/// FaceTime, WeChat, Lark…), the notetaker starts by itself; when no call app has used it for 20 s, it stops.
+/// Read from Core Audio's list of which processes are taking microphone input (macOS 14.2+), every 3 s.
+@MainActor
+final class MeetingWatch {
+  static let shared = MeetingWatch()
+  private var timer: Timer?
+  private var since: Date?
+  private var quietSince: Date?
+  private(set) var autoStarted = false
+
+  static let callApps = ["us.zoom", "com.microsoft.teams", "com.apple.FaceTime", "com.cisco.webex", "com.webex", "com.tencent.xinWeChat",
+                         "com.tencent.meeting", "com.tencent.qq", "com.tinyspeck.slackmacgap", "com.hnc.Discord", "net.whatsapp",
+                         "com.electron.lark", "com.bytedance", "com.google.Chrome", "com.apple.Safari", "com.apple.WebKit",
+                         "company.thebrowser", "com.microsoft.edgemac", "com.brave.Browser", "org.mozilla.firefox", "ru.keepcoder.Telegram"]
+
+  func start() {
+    timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in Task { @MainActor in MeetingWatch.shared.tick() } }
+  }
+
+  private func tick() {
+    let recorder = App.recorder
+    let inCall = Prefs.shared.autoMeetings && !Self.micUsers().filter { id in Self.callApps.contains { id.hasPrefix($0) } }.isEmpty
+    if inCall {
+      quietSince = nil
+      if since == nil { since = Date() }
+      if !recorder.recording, let s = since, Date().timeIntervalSince(s) >= 6 {
+        recorder.start()
+        autoStarted = recorder.recording
+        if autoStarted { Dictation.shared.show("Notetaker started · ⌥M stops it") }
+      }
+    } else {
+      since = nil
+      guard autoStarted, recorder.recording else { autoStarted = false; return }
+      if quietSince == nil { quietSince = Date() }
+      if let q = quietSince, Date().timeIntervalSince(q) >= 20 {
+        recorder.stop()
+        autoStarted = false
+        Dictation.shared.show("Call ended · notes saved")
+      }
+    }
+  }
+
+  /// Bundle identifiers of the processes taking microphone input right now, WisprFree's own left out.
+  static func micUsers() -> [String] {
+    var a = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &size) == noErr else { return [] }
+    var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &size, &ids) == noErr else { return [] }
+    let mine = Bundle.main.bundleIdentifier ?? ""
+    return ids.compactMap { p in
+      var run: UInt32 = 0
+      var s = UInt32(MemoryLayout<UInt32>.size)
+      var r = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyIsRunningInput, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+      guard AudioObjectGetPropertyData(p, &r, 0, nil, &s, &run) == noErr, run != 0 else { return nil }
+      var b = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyBundleID, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+      var cf: Unmanaged<CFString>?
+      var bs = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+      guard AudioObjectGetPropertyData(p, &b, 0, nil, &bs, &cf) == noErr, let id = cf?.takeRetainedValue() as String?, id != mine else { return nil }
+      return id
+    }
   }
 }
