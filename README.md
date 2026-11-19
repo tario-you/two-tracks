@@ -56,8 +56,8 @@ Data lives in `~/Library/Application Support/WisprFree`: `wisprfree.sqlite` (his
 Requires macOS 15 or later on Apple silicon and Xcode's command line tools.
 
 ```bash
-git clone https://github.com/tario-you/two-tracks.git
-cd two-tracks
+git clone https://github.com/tario-you/wisprfree.git
+cd wisprfree
 scripts/build-app.sh --install
 ```
 
