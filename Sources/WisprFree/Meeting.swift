@@ -195,8 +195,7 @@ final class Recorder: ObservableObject {
 
     \(earlier.isEmpty ? "" : "Earlier questions:\n\(earlier)\n\n")Question: \(question)
     """
-    var answer = try? await Vertex.shared.chat(model: Vertex.smart, system: system, user: user, maxTokens: 4_000, timeout: 90)
-    if answer == nil { answer = await ClaudePlan.ask(user, system: system, timeout: 300) }
+    let answer = try? await Vertex.shared.chat(model: Vertex.smart, system: system, user: user, maxTokens: 4_000, timeout: 90)
     store.update(id) { n in
       if let i = n.chat?.firstIndex(where: { $0.id == turn.id }) { n.chat?[i].answer = answer ?? "Couldn't reach a model. Check AI formatting in Settings." }
     }
@@ -212,42 +211,6 @@ final class Recorder: ObservableObject {
 
 func clock(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
-/// Follows a Wispr Flow meeting, read-only: its lines from Wispr's live file, English for each.
-@MainActor
-final class WisprFollower {
-  private var id: String?
-  private var offset: UInt64 = 0
-  private var timer: Timer?
-  private let store: Store
-
-  init(store: Store) { self.store = store }
-
-  func follow(_ id: String?) {
-    guard id != self.id else { return }
-    if let old = self.id { Translator.shared.close(old) }
-    timer?.invalidate()
-    self.id = id
-    offset = 0
-    guard let id, store.wispr.contains(where: { $0.id == id }) else { self.id = nil; return }
-    let saved = store.savedTranslations(id)
-    store.update(id) { $0.lines = [] }
-    let tick = { [weak self] in
-      guard let self, self.id == id else { return }
-      let (new, next) = Wispr.lines(id, from: self.offset)
-      self.offset = next
-      guard !new.isEmpty else { return }
-      let lines = new.map { l -> Line in
-        var l = l
-        l.english = l.isEnglish ? l.text : saved[l.id]
-        return l
-      }
-      self.store.update(id) { $0.lines += lines }
-      Translator.shared.translate(note: id, lines: lines)
-    }
-    tick()
-    timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in Task { @MainActor in tick() } }
-  }
-}
 
 /// Wispr Flow's automatic meeting notes: when a call app starts using the microphone (Zoom, Meet in a browser, Teams,
 /// FaceTime, WeChat, Lark…), the notetaker starts by itself; when no call app has used it for 20 s, it stops.
@@ -262,8 +225,8 @@ final class MeetingWatch {
 
   static let callApps = ["us.zoom", "com.microsoft.teams", "com.apple.FaceTime", "com.cisco.webex", "com.webex", "com.tencent.xinWeChat",
                          "com.tencent.meeting", "com.tencent.qq", "com.tinyspeck.slackmacgap", "com.hnc.Discord", "net.whatsapp",
-                         "com.electron.lark", "com.bytedance", "com.google.Chrome", "com.apple.Safari", "com.apple.WebKit",
-                         "company.thebrowser", "com.microsoft.edgemac", "com.brave.Browser", "org.mozilla.firefox", "ru.keepcoder.Telegram"]
+                         "com.electron.lark", "com.google.Chrome", "com.apple.Safari",
+                         "company.thebrowser", "com.microsoft.edgemac", "com.brave.Browser", "org.mozilla.firefox"]
 
   func start() {
     timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in Task { @MainActor in MeetingWatch.shared.tick() } }

@@ -5,7 +5,6 @@ struct NotetakerPage: View {
   @EnvironmentObject var store: Store
   @EnvironmentObject var recorder: Recorder
   @State private var selection: String?
-  @State private var follower: WisprFollower?
   @State private var query = ""
 
   var body: some View {
@@ -47,17 +46,13 @@ struct NotetakerPage: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .onAppear {
-      if follower == nil { follower = WisprFollower(store: store) }
-      if Wispr.installed { store.wispr = Wispr.meetings() }
-      if selection == nil { selection = recorder.noteID ?? store.notes.first?.id ?? store.wispr.first?.id }
+      if selection == nil { selection = recorder.noteID ?? store.notes.first?.id }
     }
-    .onChange(of: selection) { _, id in follower?.follow(id) }
     .onChange(of: recorder.noteID) { _, id in if let id { selection = id } }
   }
 
   private func groups() -> [(String, [Note])] {
-    let mine = Set(store.notes.map(\.id))
-    let all = (store.notes + store.wispr.filter { !mine.contains($0.id) }).sorted { $0.created > $1.created }.filter { n in
+    let all = store.notes.sorted { $0.created > $1.created }.filter { n in
       query.isEmpty || n.title.localizedCaseInsensitiveContains(query) || n.lines.contains { $0.text.localizedCaseInsensitiveContains(query) }
     }
     let cal = Calendar.current
@@ -225,6 +220,10 @@ struct NoteView: View {
         Picker("", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented).labelsHidden().frame(width: 330)
           .onChange(of: mode) { _, m in if m == .both || m == .english { Translator.shared.translate(note: id, lines: note.lines) } }
           .onAppear { if mode == .both || mode == .english { Translator.shared.translate(note: id, lines: note.lines) } }
+        if FileManager.default.fileExists(atPath: WisprImport.recordings.appendingPathComponent(note.id).path) {
+          Button { NSWorkspace.shared.activateFileViewerSelecting([WisprImport.recordings.appendingPathComponent(note.id)]) } label: {
+            Image(systemName: "waveform.circle") }.buttonStyle(.plain).foregroundStyle(Theme.dim).help("Show the recording")
+        }
         Button { Inserter.copy(recorder.transcriptText(note)) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.plain).foregroundStyle(Theme.dim).help("Copy transcript")
       }
       .padding(.horizontal, 14).padding(.vertical, 10)

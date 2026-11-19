@@ -32,11 +32,8 @@ final class Dictation: ObservableObject {
 
   var listening: Bool { if case .listening = phase { return true }; return false }
 
-  /// Wispr Flow hears the same keys; WisprFree waits until Wispr Flow quits or is told to run alongside.
-  var standingBy: Bool { WisprWatch.running && !Prefs.shared.alongsideWispr }
 
   func handle(_ e: KeyTap.Event) -> Bool {
-    if standingBy && !listening { return false }
     switch e {
     case .talkDown:
       if case .listening(true) = phase { finish(); return false }
@@ -84,7 +81,7 @@ final class Dictation: ObservableObject {
 
   /// Hands-free from the flow bar or the menu.
   func toggleHandsFree() {
-    if listening { finish() } else { begin(); phase = .listening(handsFree: true) }
+    if listening { finish() } else { begin(); if listening { phase = .listening(handsFree: true) } }
   }
 
   func begin() {
@@ -193,7 +190,7 @@ final class Dictation: ObservableObject {
         Log.line(String(format: "dictation %.1fs audio, lid %.2fs, asr %.2fs (%@, %@), format %.2fs (%@), total %.2fs", seconds,
                         heard.lidSeconds, heard.asrSeconds, heard.model, heard.language, out.seconds, out.ai ? "ai" : "rules",
                         Date().timeIntervalSince(t0)))
-        self.phase = .idle
+        if out.failed { self.show("Formatting failed · pasted as heard") } else { self.phase = .idle }
       }
     }
   }

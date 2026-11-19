@@ -36,14 +36,13 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate {
     NSApp.mainMenu = menu()
     makeStatusItem()
     MeetingWatch.shared.start()
-    if !UserDefaults.standard.bool(forKey: "wisprMeetingsImported2"), FileManager.default.fileExists(atPath: Wispr.root.path) {
+    if FileManager.default.fileExists(atPath: Wispr.root.path) {
       let have = Set(App.store.notes.map(\.id))
       Task.detached(priority: .utility) {
         let notes = WisprImport.meetings(skipping: have)
         await MainActor.run {
           App.store.adopt(notes)
-          UserDefaults.standard.set(true, forKey: "wisprMeetingsImported2")
-          Log.line("imported \(notes.count) Wispr Flow meetings")
+          if !notes.isEmpty { Log.line("imported \(notes.count) Wispr Flow meetings") }
         }
       }
     }
@@ -54,7 +53,13 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Picks up the key tap as soon as Accessibility is allowed, and the talk key when it changes.
     keyTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in Task { @MainActor in App.shared?.startKeys() } }
     if prefs.aiFormatting { Vertex.shared.warm() }
-    if Models.installed && !Dictation.shared.standingBy { Engine.shared.warm() }
+    if Models.installed { Engine.shared.warm() }
+    // WisprFree takes Wispr Flow's place: it hears the same keys, so Wispr Flow is closed now and whenever it opens.
+    WisprWatch.quitWispr()
+    NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { n in
+      let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+      if app?.bundleIdentifier == WisprWatch.bundleID { app?.terminate() }
+    }
     if !prefs.onboarded || prefs.showInDock { openHub() }
   }
 
@@ -168,13 +173,12 @@ extension App: NSMenuDelegate {
   func menuNeedsUpdate(_ m: NSMenu) {
     m.removeAllItems()
     let d = Dictation.shared
-    let head = NSMenuItem(title: d.standingBy ? "Standing by while Wispr Flow runs" : "Hold \(Prefs.shared.talkKey.label) to dictate", action: nil, keyEquivalent: "")
+    let head = NSMenuItem(title: "Hold \(Prefs.shared.talkKey.label) to dictate", action: nil, keyEquivalent: "")
     head.isEnabled = false
     m.addItem(head)
     if !Inserter.trusted {
       m.addItem(withTitle: "Allow Accessibility to dictate…", action: #selector(openSettings), keyEquivalent: "").target = self
     }
-    if d.standingBy { m.addItem(withTitle: "Quit Wispr Flow", action: #selector(quitWispr), keyEquivalent: "").target = self }
     m.addItem(.separator())
     m.addItem(withTitle: App.recorder.recording ? "Stop notetaker" : "Start notetaker", action: #selector(notetaker), keyEquivalent: "").target = self
     let paste = m.addItem(withTitle: "Paste last transcript", action: #selector(pasteLast), keyEquivalent: "v")

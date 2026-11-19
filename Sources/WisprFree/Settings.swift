@@ -25,7 +25,7 @@ final class ModelsSetup: ObservableObject {
           }
         }
         busy = false
-        if !Dictation.shared.standingBy { Engine.shared.warm() }
+        Engine.shared.warm()
       } catch {
         busy = false
         problem = "Speech models: \(error.localizedDescription)"
@@ -121,10 +121,6 @@ struct SettingsPage: View {
                 imported = "Added \(r.history) dictations, \(r.words) words and \(r.snippets) snippets."
               }.buttonStyle(QuietButton())
             }
-            row("Run alongside Wispr Flow", "Off: WisprFree stands by while Wispr Flow is running, so the same key never types twice.") {
-              Toggle("", isOn: $prefs.alongsideWispr).toggleStyle(.switch).labelsHidden()
-            }
-            if WisprWatch.running { HStack { Spacer(); Button("Quit Wispr Flow") { WisprWatch.quitWispr() }.buttonStyle(QuietButton()) } }
           }
         }
         section("Speech models") {
@@ -234,17 +230,9 @@ struct Onboarding: View {
           NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
       case 2:
-        title(wisprRunning ? "Wispr Flow is running" : "One key, one app")
-        if wisprRunning {
-          Text("It listens to the same key, so both would type. Quit it to use WisprFree, or keep both and WisprFree stays on standby while Wispr Flow runs.")
-            .foregroundStyle(Theme.dim)
-          HStack {
-            Button("Quit Wispr Flow") { WisprWatch.quitWispr(); prefs.alongsideWispr = false }.buttonStyle(PrimaryButton())
-            Button("Keep both") { prefs.alongsideWispr = false; step += 1 }.buttonStyle(QuietButton())
-          }
-        } else {
-          Text("Nothing else is listening to \(prefs.talkKey.label). You're set.").foregroundStyle(Theme.dim)
-        }
+        title("One key, one app")
+        Text("WisprFree takes Wispr Flow's place: it closes Wispr Flow whenever it opens, so \(prefs.talkKey.label) only ever types once.")
+          .foregroundStyle(Theme.dim)
       default:
         title("Try it")
         Text("Click the box, hold \(prefs.talkKey.label) and say something. Let go when you're done.").foregroundStyle(Theme.dim)

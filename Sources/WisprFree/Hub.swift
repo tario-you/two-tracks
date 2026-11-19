@@ -79,7 +79,6 @@ struct Sidebar: View {
       ForEach([Page.home, .notetaker, .dictionary, .snippets, .style]) { p in item(p) }
       Spacer()
       if setup.busy || setup.problem != nil { ModelBanner().padding(.horizontal, 10).padding(.bottom, 8) }
-      if WisprWatch.running && !prefs.alongsideWispr { WisprBanner().padding(.horizontal, 10).padding(.bottom, 8) }
       item(.settings).padding(.bottom, 14)
     }
   }
@@ -131,18 +130,6 @@ struct ModelBanner: View {
   }
 }
 
-struct WisprBanner: View {
-  @EnvironmentObject var prefs: Prefs
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Wispr Flow is running and listens to the same keys. WisprFree is standing by.").font(Theme.sans(12)).foregroundStyle(Theme.dim)
-      Button("Quit Wispr Flow") { WisprWatch.quitWispr() }.buttonStyle(PrimaryButton())
-      Button("Run both") { prefs.alongsideWispr = true }.buttonStyle(.plain).font(Theme.sans(12)).foregroundStyle(Theme.dim)
-    }
-    .padding(10)
-    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-  }
-}
 
 // MARK: Home
 

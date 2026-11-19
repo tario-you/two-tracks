@@ -95,8 +95,6 @@ final class Prefs: ObservableObject {
   @Published var firstName: String { didSet { d.set(firstName, forKey: "firstName") } }
   @Published var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
   @Published var cloudProject: String { didSet { d.set(cloudProject, forKey: "cloudProject") } }
-  /// While Wispr Flow runs it hears the same keys; WisprFree stays quiet until told to take over.
-  @Published var alongsideWispr: Bool { didSet { d.set(alongsideWispr, forKey: "alongsideWispr") } }
 
   private init() {
     talkKey = TalkKey(rawValue: d.string(forKey: "talkKey") ?? "") ?? .fn
@@ -116,7 +114,6 @@ final class Prefs: ObservableObject {
     firstName = d.string(forKey: "firstName") ?? NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
     onboarded = d.bool(forKey: "onboarded")
     cloudProject = d.string(forKey: "cloudProject") ?? ""
-    alongsideWispr = d.bool(forKey: "alongsideWispr")
   }
 
   /// Takes Wispr Flow's settings where it has them: the talk key, styles, languages, sounds, the flow bar, the Dock

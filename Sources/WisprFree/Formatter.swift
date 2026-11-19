@@ -26,6 +26,7 @@ enum Formatter {
   struct Output: Sendable {
     var text: String
     var ai: Bool
+    var failed = false
     var seconds: Double
     var category: String
   }
@@ -75,9 +76,9 @@ enum Formatter {
     let category = category(bundleID: input.bundleID, windowTitle: input.windowTitle)
     let style = category.flatMap { settings.styles[$0] }
     let continuing = continues(input.before)
-    let fallback = rules(input.raw, style: style, continuing: continuing, cleanup: settings.cleanup)
-    var text = fallback
+    var text = input.raw
     var ai = false
+    var failed = false
     let words = input.raw.split(whereSeparator: \.isWhitespace).count
     if settings.ai && (words >= 3 || Engine.hasHan(input.raw)) {
       let user = prompt(input, category: category, words: settings.words)
@@ -92,11 +93,14 @@ enum Formatter {
       if let a = answer.map(tidy), accept(a, raw: input.raw) {
         text = a
         ai = true
+      } else {
+        failed = true
       }
     }
     text = applyDictionary(text, settings.words)
     text = applySnippets(text, settings.snippets)
-    return Output(text: text, ai: ai, seconds: Date().timeIntervalSince(t0), category: category?.rawValue ?? "tools")
+    _ = continuing
+    return Output(text: text, ai: ai, failed: failed, seconds: Date().timeIntervalSince(t0), category: category?.rawValue ?? "tools")
   }
 
   static func systemPrompt(style: Style?, cleanup: Bool = true) -> String {
@@ -180,38 +184,6 @@ enum Formatter {
     return !".!?。！？\n:".contains(last)
   }
 
-  static func rules(_ s: String, style: Style?, continuing: Bool, cleanup: Bool = true) -> String {
-    var t = s
-    var edits: [(String, String)] = [
-      (#"(?i)(^|[\s,])(?:u+m+|u+h+|e+r+m+|e+r|h+m+|m{2,})[,.]?(?=\s|$|[,.?!])"#, "$1"),
-      (#"(?i)\b(i|i'm|it's|that's|the|a|to|and|we|you|is|so|it|this|in|of)\s+\1\b"#, "$1"),
-      (#"[ \t]+([,.?!;:，。？！])"#, "$1"),
-      (#"^[\s,，]+"#, ""),
-      (#"[ \t]{2,}"#, " "),
-    ]
-    if cleanup { edits.append((#"(?i)\bcause\b"#, "because")) }
-    for (p, r) in edits { t = t.replacingOccurrences(of: p, with: r, options: .regularExpression) }
-    t = t.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let first = t.first else { return t }
-    if continuing, first.isUppercase, !t.hasPrefix("I ") && !t.hasPrefix("I'") {
-      let word = t.prefix { $0.isLetter }
-      if word.dropFirst().allSatisfy(\.isLowercase) { t = first.lowercased() + t.dropFirst() }
-    } else if !continuing, first.isLowercase {
-      t = first.uppercased() + t.dropFirst()
-    }
-    switch style {
-    case .veryCasual?:
-      t = t.lowercased()
-      if t.hasSuffix(".") { t.removeLast() }
-    case .casual?:
-      if t.hasSuffix(".") && t.dropLast().rangeOfCharacter(from: CharacterSet(charactersIn: ".!?")) == nil { t.removeLast() }
-    case .excited?:
-      if t.hasSuffix(".") && t.dropLast().rangeOfCharacter(from: CharacterSet(charactersIn: ".!?")) == nil { t.removeLast(); t += "!" }
-    default:
-      break
-    }
-    return t
-  }
 
   /// An entry with a replacement swaps the heard phrase for it. Plain dictionary words only guide the model's spelling:
   /// forcing their case would turn every "progress" into "Progress".

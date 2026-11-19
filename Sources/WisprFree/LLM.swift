@@ -203,10 +203,9 @@ enum ClaudePlan {
   }
 }
 
-/// Meeting work goes to Claude on the plan first and to Gemini when Claude Code isn't there or fails.
+/// Meeting work goes to Claude on the plan.
 enum Smart {
   static func ask(system: String, user: String, timeout: TimeInterval = 600) async -> String? {
-    if let a = await ClaudePlan.ask(user, system: system, timeout: timeout) { return a }
-    return try? await Vertex.shared.chat(model: Vertex.smart, system: system, user: user, maxTokens: 16_000, timeout: min(timeout, 180))
+    await ClaudePlan.ask(user, system: system, timeout: timeout)
   }
 }
