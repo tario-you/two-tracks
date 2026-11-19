@@ -25,22 +25,45 @@ struct Note: Codable, Identifiable, Equatable {
   var lines: [Line] = []
   var notes = ""
   var summary = ""
+  /// The transcript after the meeting: paragraphs cleaned up and the speakers named where the talk makes it clear.
+  var paragraphs: [Paragraph]?
+  /// Questions asked about the meeting and their answers.
+  var chat: [ChatTurn]?
 }
 
-/// Notes live as one JSON file each in ~/Library/Application Support/Two Tracks/notes.
-/// Wispr Flow's meetings show beside them read-only; their translations are kept here too.
+struct Paragraph: Codable, Identifiable, Equatable {
+  var id: String
+  var speaker: String
+  var start: Double
+  var text: String
+}
+
+struct ChatTurn: Codable, Identifiable, Equatable {
+  var id: String
+  var question: String
+  var answer: String?
+}
+
+/// Notes live as one JSON file each in ~/Library/Application Support/WisprFree/notes; the first launch copies in the
+/// notes Two Tracks kept. Wispr Flow's meetings show beside them read-only; their translations are kept here too.
 @MainActor
 final class Store: ObservableObject {
   @Published var notes: [Note] = []
   @Published var wispr: [Note] = []
 
-  nonisolated static let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+  nonisolated static let home = Library.home
+  nonisolated static let twoTracks = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     .appendingPathComponent("Two Tracks", isDirectory: true)
   private let dir = Store.home.appendingPathComponent("notes", isDirectory: true)
   private var saveTasks: [String: Task<Void, Never>] = [:]
 
   init() {
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let fm = FileManager.default
+    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    for old in (try? fm.contentsOfDirectory(at: Store.twoTracks.appendingPathComponent("notes"), includingPropertiesForKeys: nil)) ?? []
+      where old.pathExtension == "json" && !fm.fileExists(atPath: dir.appendingPathComponent(old.lastPathComponent).path) {
+      try? fm.copyItem(at: old, to: dir.appendingPathComponent(old.lastPathComponent))
+    }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     notes = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
@@ -97,7 +120,7 @@ final class Store: ObservableObject {
   /// Also reads the folder the first Two Tracks (a small web view over the same files) kept.
   func savedTranslations(_ id: String) -> [String: String] {
     var map: [String: String] = [:]
-    for dir in [Store.home.appendingPathComponent("translations"), translationsDir] {
+    for dir in [Store.twoTracks.appendingPathComponent("translations"), Store.twoTracks.appendingPathComponent("wispr-translations"), translationsDir] {
       let saved = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: dir.appendingPathComponent("\(id).json")))) ?? [:]
       map.merge(saved) { _, new in new }
     }

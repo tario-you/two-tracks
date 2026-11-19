@@ -1,5 +1,4 @@
 .build/
 build/
-.swiftpm/
-*.wav
 .DS_Store
+Vendor/
